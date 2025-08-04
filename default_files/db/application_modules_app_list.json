@@ -1,0 +1,33 @@
+[
+    {
+        "name": "home",
+        "folder": "application_modules",
+        "visibility": false
+    },
+    {
+        "name": "calculate",
+        "folder": "application_modules",
+        "visibility": true
+    },
+    {
+        "name": "settings",
+        "folder": "application_modules",
+        "visibility": true
+    },
+    {
+        "name": "chatbot_ai",
+        "folder": "application_modules",
+        "visibility": false
+    },
+    {
+        "name": "installed_apps",
+        "folder": "application_modules",
+        "visibility": true
+    },
+    {
+        "name": "scientific_calculator",
+        "folder":"application_modules",
+        "visibility": true
+    }
+    
+]
