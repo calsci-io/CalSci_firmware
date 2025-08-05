@@ -670,6 +670,12 @@ static mp_obj_t framebuf_ellipse(size_t n_args, const mp_obj_t *args_in) {
     mp_int_t args[5];
     framebuf_args(args_in, args, 5); // cx, cy, xradius, yradius, col
     mp_int_t mask = (n_args > 6 && mp_obj_is_true(args_in[6])) ? ELLIPSE_MASK_FILL : 0;
+
+    if (!self->changed_cleared) {
+    self->changed_count = 0;
+    self->changed_cleared = true;
+}
+
     if (n_args > 7) {
         mask |= mp_obj_get_int(args_in[7]) & ELLIPSE_MASK_ALL;
     } else {
@@ -867,6 +873,12 @@ static mp_obj_t framebuf_blit(size_t n_args, const mp_obj_t *args_in) {
 
     mp_obj_framebuf_t source;
     get_readonly_framebuffer(args_in[1], &source);
+
+    if (!self->changed_cleared) {
+    self->changed_count = 0;
+    self->changed_cleared = true;
+}
+
 
     mp_int_t x = mp_obj_get_int(args_in[2]);
     mp_int_t y = mp_obj_get_int(args_in[3]);
