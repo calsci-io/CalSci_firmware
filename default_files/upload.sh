@@ -21,11 +21,11 @@ find . -type f | while read -r file; do
     # Create directory structure on device if needed
     dir_path=$(dirname "$relative_path")
     if [ "$dir_path" != "." ]; then
-        ampy -p /dev/ttyACM1 mkdir "$dir_path" 2>/dev/null
+        ampy -p /dev/ttyACM0 mkdir "$dir_path" 2>/dev/null
     fi
 
     # Upload the file
-    ampy -p /dev/ttyACM1 put "$file" "$relative_path"
+    ampy -p /dev/ttyACM0 put "$file" "$relative_path"
 
     echo "$relative_path uploaded"
     echo ""
