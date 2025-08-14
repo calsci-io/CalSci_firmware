@@ -27,7 +27,7 @@ backlight_pin.on() #2.9
 # from test_async import main
 # asyncio.run(main())
 import builtins
-from data_modules.object_handler import text, menu, form, text_refresh, menu_refresh, form_refresh
+from data_modules.object_handler import text, menu, form, text_refresh, menu_refresh, form_refresh, data_bucket
 builtins.display=display
 builtins.text=text
 builtins.menu=menu
@@ -53,29 +53,31 @@ try:
     with open(wifi_config_file, "r") as f:
         wifi_data = json.load(f)
         
-    with open("/database/boot_up.json") as f:
+    with open("/db/boot_up.json") as f:
         boot_data = json.load(f)
         
-    if boot_data["states"].get("wifi_connected"):
+    # if boot_data["states"].get("wifi_connected"):
 
-        scanned = sta_if.scan()
-        available_ssids = [net[0].decode() for net in scanned]
+    scanned = sta_if.scan()
+    available_ssids = [net[0].decode() for net in scanned]
 
-        for entry in wifi_data:
-            ssid = entry.get("ssid")
-            password = entry.get("password")
-            if ssid in available_ssids:
-                print("Connecting to:", ssid)
-                sta_if.connect(ssid, password)
-                for _ in range(100):
-                    if sta_if.isconnected():
-                        break
-                    time.sleep(0.1)
-                break
+    for entry in wifi_data:
+        ssid = entry.get("ssid")
+        password = entry.get("password")
+        if ssid in available_ssids:
+            print("Connecting to:", ssid)
+            sta_if.connect(ssid, password)
+            for _ in range(100):
+                if sta_if.isconnected():
+                    break
+                time.sleep(0.1)
+            break
 
-        print("WiFi connected:", sta_if.isconnected())
-        if sta_if.isconnected():
-            print("IP config:", sta_if.ifconfig())
+    print("WiFi connected:", sta_if.isconnected())
+    if sta_if.isconnected():
+        print("IP config:", sta_if.ifconfig())
+        data_bucket["connection_status_g"]=True
+
 
 except Exception as e:
     print("WiFi setup skipped or failed:", e)
