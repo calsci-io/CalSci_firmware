@@ -19,7 +19,7 @@ def test_deep_sleep_awake():
     esp32.gpio_deep_sleep_hold(True)
     machine.deepsleep()
 
-swdt=SoftWatchdog(timeout_ms=get_sleep_time(), callback=test_deep_sleep_awake, timer_id=1)
+# swdt=SoftWatchdog(timeout_ms=get_sleep_time(), callback=test_deep_sleep_awake, timer_id=1)
 
 def update_sleep_time(time):
     global swdt, db
