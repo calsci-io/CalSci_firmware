@@ -1,7 +1,9 @@
 #!/bin/bash
 
+PORT="/dev/ttyACM0"
+
 echo ""
-echo "Items present:"
+echo "Items present locally:"
 echo ""
 
 find . -type f | while read -r file; do
@@ -9,23 +11,38 @@ find . -type f | while read -r file; do
 done
 
 echo ""
-echo "Uploading files..."
+echo "Uploading files to ESP32..."
 echo ""
 
+# Function to create directories recursively on ESP32
+create_dirs() {
+    local path="$1"
+    local current=""
+
+    IFS='/' read -ra parts <<< "$path"
+    for part in "${parts[@]}"; do
+        if [ -n "$current" ]; then
+            current="$current/$part"
+        else
+            current="$part"
+        fi
+        ampy -p "$PORT" mkdir "$current" 2>/dev/null
+    done
+}
+
 find . -type f | while read -r file; do
-    # Strip the leading './' to get the relative path
+    # Strip the leading './'
     relative_path="${file#./}"
 
     echo "Uploading $relative_path"
 
-    # Create directory structure on device if needed
     dir_path=$(dirname "$relative_path")
     if [ "$dir_path" != "." ]; then
-        ampy -p /dev/ttyACM1 mkdir "$dir_path" 2>/dev/null
+        create_dirs "$dir_path"
     fi
 
     # Upload the file
-    ampy -p /dev/ttyACM1 put "$file" "$relative_path"
+    ampy -p "$PORT" put "$file" "$relative_path"
 
     echo "$relative_path uploaded"
     echo ""
