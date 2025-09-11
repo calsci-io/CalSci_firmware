@@ -1,12 +1,21 @@
-#!/bin/bash
+
+PORT="/dev/ttyACM2"
 
 PORT="/dev/ttyACM0"
 
 echo ""
-echo "Items present locally:"
+
+echo "Items present locally (excluding .git, hidden files, and *.pyc):"
+
 echo ""
 
-find . -type f | while read -r file; do
+find . -type f \
+    -not -path "./.git/*" \
+    -not -name ".gitignore" \
+    -not -name ".gitattributes" \
+    -not -name "*.pyc" \
+    -not -path "*/.*/*" \
+    -not -name ".*" | while read -r file; do
     echo "$file"
 done
 
@@ -30,7 +39,15 @@ create_dirs() {
     done
 }
 
-find . -type f | while read -r file; do
+
+find . -type f \
+    -not -path "./.git/*" \
+    -not -name ".gitignore" \
+    -not -name ".gitattributes" \
+    -not -name "*.pyc" \
+    -not -path "*/.*/*" \
+    -not -name ".*" | while read -r file; do
+
     # Strip the leading './'
     relative_path="${file#./}"
 

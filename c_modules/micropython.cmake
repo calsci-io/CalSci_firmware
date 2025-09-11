@@ -1,0 +1,1 @@
+include(${MICROPY_DIR}/c_modules/display/micropython.cmake)
