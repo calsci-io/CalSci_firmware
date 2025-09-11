@@ -1,5 +1,5 @@
 class Menu:
-    def __init__(self, rows=7, cols=21, menu_list = ["label_0", "label_1", "label_2"], menu_cursor = 0, menu_display_position = 0):
+    def __init__(self, rows=8, cols=21, menu_list = ["label_0", "label_1", "label_2"], menu_cursor = 0, menu_display_position = 0):
         self.rows=rows
         self.cols=cols
         self.menu_list=menu_list

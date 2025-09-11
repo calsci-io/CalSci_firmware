@@ -28,11 +28,11 @@ class Tbf:
         self.disp_out.set_page_address(7)
         self.disp_out.set_column_address(0)
         j_counter=0
-        for j in state:
-            chtr=j
-            chtr_byte_data=self.chrs.invert_letter(chtr)
-            cursor_line=0b11111111
-            for k in chtr_byte_data:
-                self.disp_out.write_data(k)
-            self.disp_out.write_data(cursor_line)
-            j_counter+=1
+        # for j in state:
+        #     chtr=j
+        #     chtr_byte_data=self.chrs.invert_letter(chtr)
+        #     cursor_line=0b11111111
+        #     for k in chtr_byte_data:
+        #         self.disp_out.write_data(k)
+        #     self.disp_out.write_data(cursor_line)
+        #     j_counter+=1
