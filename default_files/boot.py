@@ -27,7 +27,7 @@ backlight_pin.on() #2.9
 # from test_async import main
 # asyncio.run(main())
 import builtins
-from data_modules.object_handler import text, menu, form, text_refresh, menu_refresh, form_refresh
+from data_modules.object_handler import text, menu, form, text_refresh, menu_refresh, form_refresh, typer, data_bucket
 builtins.display=display
 builtins.text=text
 builtins.menu=menu
@@ -35,3 +35,86 @@ builtins.form=form
 builtins.text_refresh=text_refresh
 builtins.text_refresh=menu_refresh
 builtins.text_refresh=form_refresh
+builtins.typer=typer
+
+
+
+import network
+import time
+import json
+import espnow
+import _thread
+
+sta_if = network.WLAN(network.STA_IF)
+builtins.sta_if=sta_if
+sta_if.active(False)
+time.sleep(0.5)
+gc.collect()
+sta_if.active(True)
+
+# Attempt WiFi connection using /database/wifi.json
+wifi_config_file = "/db/wifi.json"
+
+try:
+    with open(wifi_config_file, "r") as f:
+        wifi_data = json.load(f)
+        
+    # with open("/db/boot_up.json") as f:
+    #     boot_data = json.load(f)
+        
+    # if boot_data["states"].get("wifi_connected"):
+
+    scanned = sta_if.scan()
+    available_ssids = [net[0].decode() for net in scanned]
+    for entry in wifi_data:
+        ssid = entry.get("ssid")
+        password = entry.get("password")
+        if ssid in available_ssids:
+            print("Connecting to:", ssid)
+            display.clear_display()
+            menu.menu_list=["Connecting to:", str(ssid), "password:", password]
+            menu.update()
+            menu_refresh.refresh()
+            print("connected to ", str(ssid), "password:", password)
+            time.sleep(1)
+            sta_if.connect(ssid, password)
+            for _ in range(100):
+                if sta_if.isconnected():
+                    display.clear_display()
+                    menu.menu_list=["Connected to:", str(ssid)]
+                    menu.update()
+                    menu_refresh.refresh()
+                    data_bucket["ssid_g"] =ssid
+                    time.sleep(1)
+                    break
+                time.sleep(0.1)
+            break
+
+    print("WiFi connected:", sta_if.isconnected())
+    if sta_if.isconnected():
+        print("IP config:", sta_if.ifconfig())
+        data_bucket["connection_status_g"]=True
+    else:
+        display.clear_display()
+        menu.menu_list=["wifi not connected"]
+        menu.update()
+        menu_refresh.refresh()
+        time.sleep(2)
+except Exception as e:
+    print("WiFi setup skipped or failed:", e)
+
+def receiver():
+    print("my mac:",machine.unique_id())
+    e = espnow.ESPNow()
+    e.active(True)
+    while True:
+        try:
+            host, msg = e.recv()
+            if msg:
+                mac_str = ''.join('{:02X}'.format(b) for b in host)
+                print("From:", mac_str, "Message:", msg)
+        except:
+            print("message failed to recieve")
+
+if sta_if.isconnected():
+    _thread.start_new_thread(receiver, ())

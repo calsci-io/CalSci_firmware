@@ -1,1 +1,1 @@
-{"_default": {"1": {"feature": "sleep_timer", "value": 6000000}}}
+{"_default": {"1": {"value": 60000000, "feature": "sleep_timer"}}}
