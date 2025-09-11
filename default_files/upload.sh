@@ -1,8 +1,12 @@
 
 PORT="/dev/ttyACM2"
 
+PORT="/dev/ttyACM0"
+
 echo ""
+
 echo "Items present locally (excluding .git, hidden files, and *.pyc):"
+
 echo ""
 
 find . -type f \
@@ -35,6 +39,7 @@ create_dirs() {
     done
 }
 
+
 find . -type f \
     -not -path "./.git/*" \
     -not -name ".gitignore" \
@@ -42,6 +47,7 @@ find . -type f \
     -not -name "*.pyc" \
     -not -path "*/.*/*" \
     -not -name ".*" | while read -r file; do
+
     # Strip the leading './'
     relative_path="${file#./}"
 

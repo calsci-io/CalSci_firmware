@@ -70,7 +70,7 @@ sta = network.WLAN(network.STA_IF)
 sta.active(True)
 e = espnow.ESPNow()
 e.active(True)
-peer = b'\x98\xa3\x16\xe6\xd8\xb0'
+peer = b'\x98\xa3\x16\xd1!\xf8'
 e.add_peer(peer)
 
 def espnow_test():
