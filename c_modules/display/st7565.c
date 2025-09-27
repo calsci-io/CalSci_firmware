@@ -106,6 +106,6 @@ void st7565_init(st7565_t *d, spi_host_device_t host,
     /* Power-up sequence (matches Python driver) */
     CMD(d,0xAE); CMD(d,0xA2); CMD(d,0xA0); CMD(d,0xC8);
     CMD(d,0xA6); CMD(d,0x2F); CMD(d,0x27);
-    CMD(d,0x81); CMD(d,0x00);
+    CMD(d,0x81); CMD(d,0x09);
     CMD(d,0xAF);
 }
