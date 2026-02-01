@@ -1,3 +1,5 @@
+just enable idf and enter make on terminal
+
 MicroPython port to the ESP32
 =============================
 
