@@ -28,7 +28,6 @@ user.props
 # Local workspace and release packaging exclusions
 toolchain/*
 !toolchain/activate_idf.sh
-!toolchain/LOCAL_SNAPSHOT.txt
 issues_fix.md
 README.md
 ports/esp32/build*/
