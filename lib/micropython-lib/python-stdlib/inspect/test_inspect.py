@@ -1,3 +1,4 @@
+import collections
 import inspect
 import unittest
 
@@ -8,6 +9,22 @@ def fun():
 
 def gen():
     yield 1
+
+
+def make_closure():
+    a = 1
+    b = 2
+    def closure(x):
+        return a + b + x
+    return closure
+
+
+def make_gen_closure():
+    a = 1
+    b = 2
+    def gen_closure(x):
+        yield a + b + x
+    return gen_closure
 
 
 class Class:
@@ -58,3 +75,18 @@ class TestInspect(unittest.TestCase):
 
     def test_ismodule(self):
         self._test_is_helper(inspect.ismodule, entities[6])
+
+    def test_signature(self):
+        self.assertEqual(inspect.signature(globals).parameters, collections.OrderedDict())
+        self.assertEqual(len(inspect.signature(abs).parameters), 1)
+        self.assertEqual(len(inspect.signature(hasattr).parameters), 2)
+        self.assertEqual(len(inspect.signature(setattr).parameters), 3)
+        self.assertEqual(len(inspect.signature(lambda: 0).parameters), 0)
+        self.assertEqual(len(inspect.signature(lambda x: 0).parameters), 1)
+        self.assertEqual(len(inspect.signature(lambda *, x: 0).parameters), 1)
+        self.assertEqual(len(inspect.signature(lambda x, y: 0).parameters), 2)
+        self.assertEqual(len(inspect.signature(lambda x, y, z: 0).parameters), 3)
+        self.assertEqual(len(inspect.signature(lambda x, y, *, z: 0).parameters), 3)
+        self.assertEqual(len(inspect.signature(gen).parameters), 0)
+        self.assertEqual(len(inspect.signature(make_closure()).parameters), 1)
+        self.assertEqual(len(inspect.signature(make_gen_closure()).parameters), 1)
