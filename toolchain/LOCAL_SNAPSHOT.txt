@@ -1,0 +1,17 @@
+Local-only toolchain snapshot for firmware_buil/toolchain.
+
+Created on: 2026-03-15
+
+Snapshot sources:
+- esp-idf source copied from /home/rupesh/calsci/triple_boot/esp-idf
+- esp-idf commit: 67c1de1e
+- espressif tools copied from /home/rupesh/.espressif
+
+Previous toolchain backup:
+- /home/rupesh/calsci/bin/checkpoints/toolchain/20260315-005122-before-localize-toolchain/toolchain
+
+Notes:
+- This folder is now self-contained for local testing.
+- activate_idf.sh exports IDF_TOOLS_PATH to the local toolchain/espressif copy.
+- espressif/idf-env.json was rewritten to point at the localized esp-idf path.
+- The previous symlink-based toolchain can be restored from the backup path above.
