@@ -11,8 +11,7 @@ ifdef BOARD_DIR
 BOARD ?= $(notdir $(BOARD_DIR:/=))
 else
 # If not given on the command line, then default to ESP32_GENERIC.
-BOARD ?= ESP32_GENERIC_S3
-BOARD_VARIANT ?= SPIRAM_OCT
+BOARD ?= ESP32_GENERIC
 BOARD_DIR ?= boards/$(BOARD)
 endif
 
@@ -99,10 +98,10 @@ monitor:
 	$(call RUN_IDF_PY,$(DEVICE) monitor)
 
 size:
-	$(call RUN_IDF_PY,size)
+	$(call RUN_IDF_PY,size $(SIZE_FLAGS))
 
 size-components:
-	$(call RUN_IDF_PY,size-components)
+	$(call RUN_IDF_PY,size-components $(SIZE_FLAGS))
 
 size-files:
 	$(call RUN_IDF_PY,size-files)
@@ -113,4 +112,4 @@ size-files:
 # This is done in a dedicated build directory as some CMake cache values are not
 # set correctly if not all submodules are loaded yet.
 submodules:
-	$(Q)IDF_COMPONENT_MANAGER=0 idf.py $(IDFPY_FLAGS) -B $(BUILD)/submodules -D UPDATE_SUBMODULES=1 reconfigure
+	$(Q)idf.py $(IDFPY_FLAGS) -B $(BUILD)/submodules -D UPDATE_SUBMODULES=1 reconfigure

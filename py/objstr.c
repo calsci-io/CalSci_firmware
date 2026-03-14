@@ -282,7 +282,10 @@ static mp_obj_t bytes_make_new(const mp_obj_type_t *type_in, size_t n_args, size
         }
         vstr_t vstr;
         vstr_init_len(&vstr, len);
+        // If this config is set then the GC clears all memory, so we don't need to.
+        #if !MICROPY_GC_CONSERVATIVE_CLEAR
         memset(vstr.buf, 0, len);
+        #endif
         return mp_obj_new_bytes_from_vstr(&vstr);
     }
 
@@ -1304,7 +1307,7 @@ static vstr_t mp_obj_str_format_helper(const char *str, const char *top, int *ar
                 }
 
                 case '\0':  // No explicit format type implies 'd'
-                case 'n':   // I don't think we support locales in uPy so use 'd'
+                case 'n':   // I don't think we support locales in MicroPython so use 'd'
                 case 'd':
                     mp_print_mp_int(&print, arg, 10, 'a', flags, fill, width, 0);
                     continue;

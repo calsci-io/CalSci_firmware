@@ -191,7 +191,10 @@ static mp_obj_t bytearray_make_new(const mp_obj_type_t *type_in, size_t n_args, 
         // 1 arg, an integer: construct a blank bytearray of that length
         mp_uint_t len = mp_obj_get_int(args[0]);
         mp_obj_array_t *o = array_new(BYTEARRAY_TYPECODE, len);
+        // If this config is set then the GC clears all memory, so we don't need to.
+        #if !MICROPY_GC_CONSERVATIVE_CLEAR
         memset(o->items, 0, len);
+        #endif
         return MP_OBJ_FROM_PTR(o);
     } else {
         // 1 arg: construct the bytearray from that
@@ -626,7 +629,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_type_bytearray,
     MP_QSTR_bytearray,
-    MP_TYPE_FLAG_EQ_CHECKS_OTHER_TYPE | MP_TYPE_FLAG_ITER_IS_GETITER,
+    MP_TYPE_FLAG_EQ_CHECKS_OTHER_TYPE | MP_TYPE_FLAG_ITER_IS_GETITER | MP_TYPE_FLAG_SUBSCR_ALLOWS_STACK_SLICE,
     make_new, bytearray_make_new,
     print, array_print,
     iter, array_iterator_new,
@@ -654,7 +657,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
 MP_DEFINE_CONST_OBJ_TYPE(
     mp_type_memoryview,
     MP_QSTR_memoryview,
-    MP_TYPE_FLAG_EQ_CHECKS_OTHER_TYPE | MP_TYPE_FLAG_ITER_IS_GETITER,
+    MP_TYPE_FLAG_EQ_CHECKS_OTHER_TYPE | MP_TYPE_FLAG_ITER_IS_GETITER | MP_TYPE_FLAG_SUBSCR_ALLOWS_STACK_SLICE,
     make_new, memoryview_make_new,
     iter, array_iterator_new,
     unary_op, array_unary_op,

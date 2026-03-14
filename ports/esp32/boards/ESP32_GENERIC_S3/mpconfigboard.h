@@ -9,3 +9,6 @@
 
 #define MICROPY_HW_I2C0_SCL                 (9)
 #define MICROPY_HW_I2C0_SDA                 (8)
+
+// Use new I2C driver to avoid conflict with esp_driver_i2c in IDF v5.4
+#define MICROPY_HW_ESP_NEW_I2C_DRIVER       (1)
