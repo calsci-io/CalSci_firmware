@@ -47,7 +47,7 @@ static inline const char *mp_repl_get_ps2(void) {
 #else
 
 static inline const char *mp_repl_get_ps1(void) {
-    return "CalSci> ";
+    return ">>> ";
 }
 
 static inline const char *mp_repl_get_ps2(void) {

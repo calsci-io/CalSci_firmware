@@ -115,10 +115,12 @@ void asm_xtensa_exit(asm_xtensa_t *as) {
 }
 
 void asm_xtensa_entry_win(asm_xtensa_t *as, int num_locals) {
-    // jump over the constants
-    asm_xtensa_op_j(as, as->num_const * WORD_SIZE + 4 - 4);
-    mp_asm_base_get_cur_to_write_bytes(&as->base, 1); // padding/alignment byte
-    as->const_table = (uint32_t *)mp_asm_base_get_cur_to_write_bytes(&as->base, as->num_const * 4);
+    if (as->num_const > 0) {
+        // jump over the constants
+        asm_xtensa_op_j(as, as->num_const * WORD_SIZE + 4 - 4);
+        mp_asm_base_get_cur_to_write_bytes(&as->base, 1); // padding/alignment byte
+        as->const_table = (uint32_t *)mp_asm_base_get_cur_to_write_bytes(&as->base, as->num_const * 4);
+    }
 
     as->stack_adjust = 32 + ((((ASM_XTENSA_NUM_REGS_SAVED_WIN + num_locals) * WORD_SIZE) + 15) & ~15);
     asm_xtensa_op_entry(as, ASM_XTENSA_REG_A1, as->stack_adjust);
@@ -299,25 +301,47 @@ void asm_xtensa_l32i_optimised(asm_xtensa_t *as, uint reg_dest, uint reg_base, u
     }
 }
 
-void asm_xtensa_s32i_optimised(asm_xtensa_t *as, uint reg_src, uint reg_base, uint word_offset) {
-    if (word_offset < 16) {
-        asm_xtensa_op_s32i_n(as, reg_src, reg_base, word_offset);
-    } else if (word_offset < 256) {
-        asm_xtensa_op_s32i(as, reg_src, reg_base, word_offset);
+void asm_xtensa_load_reg_reg_offset(asm_xtensa_t *as, uint reg_dest, uint reg_base, uint offset, uint operation_size) {
+    assert(operation_size <= 2 && "Operation size value out of range.");
+
+    if (operation_size == 2 && MP_FIT_UNSIGNED(4, offset)) {
+        asm_xtensa_op_l32i_n(as, reg_dest, reg_base, offset);
+        return;
+    }
+
+    if (MP_FIT_UNSIGNED(8, offset)) {
+        asm_xtensa_op24(as, ASM_XTENSA_ENCODE_RRI8(2, operation_size, reg_base, reg_dest, offset));
+        return;
+    }
+
+    asm_xtensa_mov_reg_i32_optimised(as, reg_dest, offset << operation_size);
+    asm_xtensa_op_add_n(as, reg_dest, reg_base, reg_dest);
+    if (operation_size == 2) {
+        asm_xtensa_op_l32i_n(as, reg_dest, reg_dest, 0);
     } else {
-        asm_xtensa_mov_reg_i32_optimised(as, REG_TEMP, word_offset * 4);
-        asm_xtensa_op_add_n(as, REG_TEMP, reg_base, REG_TEMP);
-        asm_xtensa_op_s32i_n(as, reg_src, REG_TEMP, 0);
+        asm_xtensa_op24(as, ASM_XTENSA_ENCODE_RRI8(2, operation_size, reg_dest, reg_dest, 0));
     }
 }
 
-void asm_xtensa_l16ui_optimised(asm_xtensa_t *as, uint reg_dest, uint reg_base, uint halfword_offset) {
-    if (halfword_offset < 256) {
-        asm_xtensa_op_l16ui(as, reg_dest, reg_base, halfword_offset);
+void asm_xtensa_store_reg_reg_offset(asm_xtensa_t *as, uint reg_src, uint reg_base, uint offset, uint operation_size) {
+    assert(operation_size <= 2 && "Operation size value out of range.");
+
+    if (operation_size == 2 && MP_FIT_UNSIGNED(4, offset)) {
+        asm_xtensa_op_s32i_n(as, reg_src, reg_base, offset);
+        return;
+    }
+
+    if (MP_FIT_UNSIGNED(8, offset)) {
+        asm_xtensa_op24(as, ASM_XTENSA_ENCODE_RRI8(2, 0x04 | operation_size, reg_base, reg_src, offset));
+        return;
+    }
+
+    asm_xtensa_mov_reg_i32_optimised(as, REG_TEMP, offset << operation_size);
+    asm_xtensa_op_add_n(as, REG_TEMP, reg_base, REG_TEMP);
+    if (operation_size == 2) {
+        asm_xtensa_op_s32i_n(as, reg_src, REG_TEMP, 0);
     } else {
-        asm_xtensa_mov_reg_i32_optimised(as, reg_dest, halfword_offset * 2);
-        asm_xtensa_op_add_n(as, reg_dest, reg_base, reg_dest);
-        asm_xtensa_op_l16ui(as, reg_dest, reg_dest, 0);
+        asm_xtensa_op24(as, ASM_XTENSA_ENCODE_RRI8(2, 0x04 | operation_size, REG_TEMP, reg_src, 0));
     }
 }
 
