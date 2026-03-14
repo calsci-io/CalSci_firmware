@@ -28,6 +28,8 @@
 #ifndef MICROPY_INCLUDED_ESP32_MPTHREADPORT_H
 #define MICROPY_INCLUDED_ESP32_MPTHREADPORT_H
 
+#include <stddef.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -41,5 +43,6 @@ typedef struct _mp_thread_mutex_t {
 void mp_thread_init(void *stack, uint32_t stack_len);
 void mp_thread_gc_others(void);
 void mp_thread_deinit(void);
+mp_uint_t mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_size, int priority, char *name);
 
 #endif // MICROPY_INCLUDED_ESP32_MPTHREADPORT_H

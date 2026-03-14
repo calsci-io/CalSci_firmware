@@ -51,6 +51,7 @@ typedef enum {
 typedef struct _mp_thread_t {
     TaskHandle_t id;        // system id of thread
     mp_thread_run_state_t run_state; // current run state of the thread
+    void *(*entry)(void *); // thread entry point
     void *arg;              // thread Python args, a GC root pointer
     void *stack;            // pointer to the stack
     size_t stack_len;       // number of words in the stack
@@ -67,6 +68,7 @@ void mp_thread_init(void *stack, uint32_t stack_len) {
     // create the first entry in the linked list of all threads
     thread_entry0.id = xTaskGetCurrentTaskHandle();
     thread_entry0.run_state = MP_THREAD_RUN_STATE_RUNNING;
+    thread_entry0.entry = NULL;
     thread_entry0.arg = NULL;
     thread_entry0.stack = stack;
     thread_entry0.stack_len = stack_len;
@@ -117,19 +119,24 @@ void mp_thread_start(void) {
     mp_thread_mutex_unlock(&thread_mutex);
 }
 
-static void *(*ext_thread_entry)(void *) = NULL;
-
 static void freertos_entry(void *arg) {
+    mp_thread_t *th = (mp_thread_t *)arg;
+
+    if (th->id == NULL) {
+        th->id = xTaskGetCurrentTaskHandle();
+    }
+
     // Run the Python code.
-    if (ext_thread_entry) {
-        ext_thread_entry(arg);
+    if (th->entry != NULL) {
+        th->entry(th->arg);
     }
 
     // Remove the thread from the linked-list of active threads.
     mp_thread_mutex_lock(&thread_mutex, 1);
-    for (mp_thread_t **th = &thread; *th != NULL; th = &(*th)->next) {
-        if ((*th)->id == xTaskGetCurrentTaskHandle()) {
-            *th = (*th)->next;
+    for (mp_thread_t **cur = &thread; *cur != NULL; cur = &(*cur)->next) {
+        if (*cur == th) {
+            *cur = th->next;
+            break;
         }
     }
     mp_thread_mutex_unlock(&thread_mutex);
@@ -139,9 +146,6 @@ static void freertos_entry(void *arg) {
 }
 
 mp_uint_t mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_size, int priority, char *name) {
-    // store thread entry function into a global variable so we can access it
-    ext_thread_entry = entry;
-
     if (*stack_size == 0) {
         *stack_size = MP_THREAD_DEFAULT_STACK_SIZE; // default stack size
     } else if (*stack_size < MP_THREAD_MIN_STACK_SIZE) {
@@ -150,23 +154,29 @@ mp_uint_t mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_s
 
     // Allocate linked-list node (must be outside thread_mutex lock)
     mp_thread_t *th = m_new_obj(mp_thread_t);
+    th->id = NULL;
+    th->run_state = MP_THREAD_RUN_STATE_NEW;
+    th->entry = entry;
+    th->arg = arg;
+    th->stack = NULL;
+    th->stack_len = 0;
 
     mp_thread_mutex_lock(&thread_mutex, 1);
 
+    th->next = thread;
+    thread = th;
+
     // create thread
-    BaseType_t result = xTaskCreatePinnedToCore(freertos_entry, name, *stack_size / sizeof(StackType_t), arg, priority, &th->id, MP_TASK_COREID);
+    BaseType_t result = xTaskCreatePinnedToCore(freertos_entry, name, *stack_size / sizeof(StackType_t), th, priority, &th->id, MP_TASK_COREID);
     if (result != pdPASS) {
+        thread = th->next;
         mp_thread_mutex_unlock(&thread_mutex);
+        m_del_obj(mp_thread_t, th);
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("can't create thread"));
     }
 
-    // add thread to linked list of all threads
-    th->run_state = MP_THREAD_RUN_STATE_NEW;
-    th->arg = arg;
     th->stack = pxTaskGetStackStart(th->id);
     th->stack_len = *stack_size / sizeof(uintptr_t);
-    th->next = thread;
-    thread = th;
 
     mp_thread_mutex_unlock(&thread_mutex);
 

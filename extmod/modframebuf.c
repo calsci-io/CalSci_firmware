@@ -36,16 +36,10 @@
 
 typedef struct _mp_obj_framebuf_t {
     mp_obj_base_t base;
-    mp_obj_t      buf_obj;          
-    mp_buffer_info_t bufinfo;
-    void        *buf;               
-    int          width, height;
-    int          stride, format;
-
-    size_t       changed_count;     // how many indices logged
-    bool         changed_cleared;   // have we “frame-reset” yet?
-    uint16_t    *changed_indexes;   // dynamically allocated array
-    size_t       changed_capacity;  // == stride*height (worst case)
+    mp_obj_t buf_obj; // need to store this to prevent GC from reclaiming buf
+    void *buf;
+    uint16_t width, height, stride;
+    uint8_t format;
 } mp_obj_framebuf_t;
 
 #if !MICROPY_ENABLE_DYNRUNTIME
@@ -73,33 +67,10 @@ typedef struct _mp_framebuf_p_t {
 
 // Functions for MHLSB and MHMSB
 
-static void mono_horiz_setpixel(const mp_obj_framebuf_t *fb_in,
-                                unsigned int x, unsigned int y, uint32_t col) {
-    mp_obj_framebuf_t *fb = (mp_obj_framebuf_t *)fb_in;
-
-    if (x >= fb->width || y >= fb->height) {
-        mp_raise_ValueError(MP_ERROR_TEXT("pixel out of bounds"));
-
-        // return;  
-    }
-
-    if (!fb->changed_cleared) {
-        fb->changed_count   = 0;
-        fb->changed_cleared = true;
-    }
-
+static void mono_horiz_setpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y, uint32_t col) {
     size_t index = (x + y * fb->stride) >> 3;
-
-    if (fb->changed_count < fb->changed_capacity) {
-        fb->changed_indexes[fb->changed_count++] = index;
-    }
-
-    unsigned int offset = (fb->format == FRAMEBUF_MHMSB)
-                            ? (x & 0x07)      // MSB: bit 0 is left
-                            : (7 - (x & 0x07)); // LSB: bit 0 is right
-
-    uint8_t *b = (uint8_t*)fb->buf;
-    b[index] = (b[index] & ~(1 << offset)) | ((col != 0) << offset);
+    unsigned int offset = fb->format == FRAMEBUF_MHMSB ? x & 0x07 : 7 - (x & 0x07);
+    ((uint8_t *)fb->buf)[index] = (((uint8_t *)fb->buf)[index] & ~(0x01 << offset)) | ((col != 0) << offset);
 }
 
 static uint32_t mono_horiz_getpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y) {
@@ -124,28 +95,10 @@ static void mono_horiz_fill_rect(const mp_obj_framebuf_t *fb, unsigned int x, un
 
 // Functions for MVLSB format
 
-static void mvlsb_setpixel(const mp_obj_framebuf_t *fb_in,
-                           unsigned int x, unsigned int y, uint32_t col) {
-    mp_obj_framebuf_t *fb = (mp_obj_framebuf_t *)fb_in;
-
-    if (x >= fb->width || y >= fb->height) {
-        mp_raise_ValueError(MP_ERROR_TEXT("pixel out of bounds"));
-    }
-
-    if (!fb->changed_cleared) {
-        fb->changed_count   = 0;
-        fb->changed_cleared = true;
-    }
-
+static void mvlsb_setpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y, uint32_t col) {
     size_t index = (y >> 3) * fb->stride + x;
-
-    if (fb->changed_count < fb->changed_capacity) {
-        fb->changed_indexes[fb->changed_count++] = index;
-    }
-
     uint8_t offset = y & 0x07;
-    uint8_t *b = (uint8_t*)fb->buf;
-    b[index] = (b[index] & ~(1 << offset)) | ((col != 0) << offset);
+    ((uint8_t *)fb->buf)[index] = (((uint8_t *)fb->buf)[index] & ~(0x01 << offset)) | ((col != 0) << offset);
 }
 
 static uint32_t mvlsb_getpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y) {
@@ -166,27 +119,8 @@ static void mvlsb_fill_rect(const mp_obj_framebuf_t *fb, unsigned int x, unsigne
 
 // Functions for RGB565 format
 
-static void rgb565_setpixel(const mp_obj_framebuf_t *fb_in,
-                              unsigned int x, unsigned int y, uint32_t col) {
-    mp_obj_framebuf_t *fb = (mp_obj_framebuf_t *)fb_in;
-
-    if (x >= fb->width || y >= fb->height) {
-        mp_raise_ValueError(MP_ERROR_TEXT("pixel out of bounds"));
-    }
-
-    if (!fb->changed_cleared) {
-        fb->changed_count = 0;
-        fb->changed_cleared = true;
-    }
-
-    size_t index = 2 * (x + y * fb->stride);
-    if (fb->changed_count < fb->changed_capacity) {
-        fb->changed_indexes[fb->changed_count++] = index;
-    }
-
-    uint8_t *b = (uint8_t *)fb->buf;
-    b[index]     = col >> 8;
-    b[index + 1] = col & 0xFF;
+static void rgb565_setpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y, uint32_t col) {
+    ((uint16_t *)fb->buf)[x + y * fb->stride] = col;
 }
 
 static uint32_t rgb565_getpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y) {
@@ -205,30 +139,14 @@ static void rgb565_fill_rect(const mp_obj_framebuf_t *fb, unsigned int x, unsign
 
 // Functions for GS2_HMSB format
 
-static void gs2_hmsb_setpixel(const mp_obj_framebuf_t *fb_in,
-                               unsigned int x, unsigned int y, uint32_t col) {
-    mp_obj_framebuf_t *fb = (mp_obj_framebuf_t *)fb_in;
-
-    if (x >= fb->width || y >= fb->height) {
-        mp_raise_ValueError(MP_ERROR_TEXT("pixel out of bounds"));
-    }
-
-    if (!fb->changed_cleared) {
-        fb->changed_count   = 0;
-        fb->changed_cleared = true;
-    }
-
-    size_t index = x / 4 + y * fb->stride;
-
-    if (fb->changed_count < fb->changed_capacity) {
-        fb->changed_indexes[fb->changed_count++] = index;
-    }
-
-    int shift = 6 - 2 * (x & 0x03);
-    uint8_t *b = (uint8_t *)fb->buf;
-
-    b[index] = (b[index] & ~(0x03 << shift)) | ((col & 0x03) << shift);
+static void gs2_hmsb_setpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y, uint32_t col) {
+    uint8_t *pixel = &((uint8_t *)fb->buf)[(x + y * fb->stride) >> 2];
+    uint8_t shift = (x & 0x3) << 1;
+    uint8_t mask = 0x3 << shift;
+    uint8_t color = (col & 0x3) << shift;
+    *pixel = color | (*pixel & (~mask));
 }
+
 static uint32_t gs2_hmsb_getpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y) {
     uint8_t pixel = ((uint8_t *)fb->buf)[(x + y * fb->stride) >> 2];
     uint8_t shift = (x & 0x3) << 1;
@@ -245,24 +163,13 @@ static void gs2_hmsb_fill_rect(const mp_obj_framebuf_t *fb, unsigned int x, unsi
 
 // Functions for GS4_HMSB format
 
-static void gs4_hmsb_setpixel(const mp_obj_framebuf_t *fb_in,
-                              unsigned int x, unsigned int y, uint32_t col) {
-    mp_obj_framebuf_t *fb = (mp_obj_framebuf_t *)fb_in;
-    if (!fb->changed_cleared) {
-        fb->changed_count   = 0;
-        fb->changed_cleared = true;
-    }
+static void gs4_hmsb_setpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y, uint32_t col) {
+    uint8_t *pixel = &((uint8_t *)fb->buf)[(x + y * fb->stride) >> 1];
 
-    size_t index = (x + y * fb->stride) >> 1;
-    if (fb->changed_count < fb->changed_capacity) {
-        fb->changed_indexes[fb->changed_count++] = index;
-    }
-
-    uint8_t *p = (uint8_t*)fb->buf + index;
-    if (x & 1) {
-        *p = (col & 0x0F) | (*p & 0xF0);
+    if (x % 2) {
+        *pixel = ((uint8_t)col & 0x0f) | (*pixel & 0xf0);
     } else {
-        *p = (col << 4)  | (*p & 0x0F);
+        *pixel = ((uint8_t)col << 4) | (*pixel & 0x0f);
     }
 }
 
@@ -307,25 +214,9 @@ static void gs4_hmsb_fill_rect(const mp_obj_framebuf_t *fb, unsigned int x, unsi
 
 // Functions for GS8 format
 
-static void gs8_setpixel(const mp_obj_framebuf_t *fb_in,
-                          unsigned int x, unsigned int y, uint32_t col) {
-    mp_obj_framebuf_t *fb = (mp_obj_framebuf_t *)fb_in;
-
-    if (x >= fb->width || y >= fb->height) {
-        mp_raise_ValueError(MP_ERROR_TEXT("pixel out of bounds"));
-    }
-
-    if (!fb->changed_cleared) {
-        fb->changed_count = 0;
-        fb->changed_cleared = true;
-    }
-
-    size_t index = x + y * fb->stride;
-    if (fb->changed_count < fb->changed_capacity) {
-        fb->changed_indexes[fb->changed_count++] = index;
-    }
-
-    ((uint8_t *)fb->buf)[index] = col;
+static void gs8_setpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y, uint32_t col) {
+    uint8_t *pixel = &((uint8_t *)fb->buf)[(x + y * fb->stride)];
+    *pixel = col & 0xff;
 }
 
 static uint32_t gs8_getpixel(const mp_obj_framebuf_t *fb, unsigned int x, unsigned int y) {
@@ -380,19 +271,19 @@ static void fill_rect(const mp_obj_framebuf_t *fb, int x, int y, int w, int h, u
 }
 
 static mp_obj_t framebuf_make_new_helper(size_t n_args, const mp_obj_t *args_in, unsigned int buf_flags, mp_obj_framebuf_t *o) {
-    mp_int_t width  = mp_obj_get_int(args_in[1]);
+
+    mp_int_t width = mp_obj_get_int(args_in[1]);
     mp_int_t height = mp_obj_get_int(args_in[2]);
     mp_int_t format = mp_obj_get_int(args_in[3]);
     mp_int_t stride = n_args >= 5 ? mp_obj_get_int(args_in[4]) : width;
 
-    if (width < 1 || height < 1 || width > 0xffff || height > 0xffff
-        || stride > 0xffff || stride < width) {
+    if (width < 1 || height < 1 || width > 0xffff || height > 0xffff || stride > 0xffff || stride < width) {
         mp_raise_ValueError(NULL);
     }
 
     size_t bpp = 1;
     size_t height_required = height;
-    size_t width_required  = width;
+    size_t width_required = width;
     size_t strides_required = height - 1;
 
     switch (format) {
@@ -428,28 +319,19 @@ static mp_obj_t framebuf_make_new_helper(size_t n_args, const mp_obj_t *args_in,
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(args_in[0], &bufinfo, buf_flags);
 
-    size_t needed = (strides_required * stride + (height_required - strides_required) * width_required) * bpp / 8;
-    if (needed > bufinfo.len) {
+    if ((strides_required * stride + (height_required - strides_required) * width_required) * bpp / 8 > bufinfo.len) {
         mp_raise_ValueError(NULL);
     }
 
     if (o == NULL) {
         o = mp_obj_malloc(mp_obj_framebuf_t, (const mp_obj_type_t *)&mp_type_framebuf);
     }
-
     o->buf_obj = args_in[0];
-    o->buf     = bufinfo.buf;
-
-    size_t cap = bufinfo.len;
-    o->changed_capacity = cap;
-    o->changed_indexes  = m_malloc(cap * sizeof(uint16_t));
-    o->changed_count    = 0;
-    o->changed_cleared  = false;
-
-    o->width   = width;
-    o->height  = height;
-    o->stride  = stride;
-    o->format  = format;
+    o->buf = bufinfo.buf;
+    o->width = width;
+    o->height = height;
+    o->format = format;
+    o->stride = stride;
 
     return MP_OBJ_FROM_PTR(o);
 }
@@ -470,22 +352,7 @@ static mp_int_t framebuf_get_buffer(mp_obj_t self_in, mp_buffer_info_t *bufinfo,
     return mp_get_buffer(self->buf_obj, bufinfo, flags) ? 0 : 1;
 }
 
-static mp_obj_t framebuf_get_changes(mp_obj_t self_in) {
-    mp_obj_framebuf_t *fb = MP_OBJ_TO_PTR(self_in);
-    mp_obj_t list = mp_obj_new_list(0, NULL);
-    for (size_t i = 0; i < fb->changed_count; i++) {
-        mp_obj_list_append(list, mp_obj_new_int(fb->changed_indexes[i]));
-    }
-    return list;
-}
-static MP_DEFINE_CONST_FUN_OBJ_1(framebuf_get_changes_obj, framebuf_get_changes);
-
 static mp_obj_t framebuf_fill(mp_obj_t self_in, mp_obj_t col_in) {
-
-    mp_obj_framebuf_t *fb = MP_OBJ_TO_PTR(self_in);
-    fb->changed_count   = 0;
-    fb->changed_cleared = false;
-
     mp_obj_framebuf_t *self = MP_OBJ_TO_PTR(self_in);
     mp_int_t col = mp_obj_get_int(col_in);
     formats[self->format].fill_rect(self, 0, 0, self->width, self->height, col);
@@ -616,9 +483,7 @@ static void line(const mp_obj_framebuf_t *fb, mp_int_t x1, mp_int_t y1, mp_int_t
         e += 2 * dy;
     }
 
-    if (0 <= x2 && x2 < fb->width && 0 <= y2 && y2 < fb->height) {
-        setpixel(fb, x2, y2, col);
-    }
+    setpixel_checked(fb, x2, y2, col, 1);
 }
 
 static mp_obj_t framebuf_line(size_t n_args, const mp_obj_t *args_in) {
@@ -670,12 +535,6 @@ static mp_obj_t framebuf_ellipse(size_t n_args, const mp_obj_t *args_in) {
     mp_int_t args[5];
     framebuf_args(args_in, args, 5); // cx, cy, xradius, yradius, col
     mp_int_t mask = (n_args > 6 && mp_obj_is_true(args_in[6])) ? ELLIPSE_MASK_FILL : 0;
-
-    if (!self->changed_cleared) {
-    self->changed_count = 0;
-    self->changed_cleared = true;
-}
-
     if (n_args > 7) {
         mask |= mp_obj_get_int(args_in[7]) & ELLIPSE_MASK_ALL;
     } else {
@@ -874,12 +733,6 @@ static mp_obj_t framebuf_blit(size_t n_args, const mp_obj_t *args_in) {
     mp_obj_framebuf_t source;
     get_readonly_framebuffer(args_in[1], &source);
 
-    if (!self->changed_cleared) {
-    self->changed_count = 0;
-    self->changed_cleared = true;
-}
-
-
     mp_int_t x = mp_obj_get_int(args_in[2]);
     mp_int_t y = mp_obj_get_int(args_in[3]);
     mp_int_t key = -1;
@@ -932,39 +785,40 @@ static mp_obj_t framebuf_scroll(mp_obj_t self_in, mp_obj_t xstep_in, mp_obj_t ys
     mp_obj_framebuf_t *self = MP_OBJ_TO_PTR(self_in);
     mp_int_t xstep = mp_obj_get_int(xstep_in);
     mp_int_t ystep = mp_obj_get_int(ystep_in);
-    int sx, y, xend, yend, dx, dy;
+    unsigned int sx, y, xend, yend;
+    int dx, dy;
     if (xstep < 0) {
-        sx = 0;
-        xend = self->width + xstep;
-        if (xend <= 0) {
+        if (-xstep >= self->width) {
             return mp_const_none;
         }
+        sx = 0;
+        xend = self->width + (int)xstep;
         dx = 1;
     } else {
-        sx = self->width - 1;
-        xend = xstep - 1;
-        if (xend >= sx) {
+        if (xstep >= self->width) {
             return mp_const_none;
         }
+        sx = self->width - 1;
+        xend = (int)xstep - 1;
         dx = -1;
     }
     if (ystep < 0) {
-        y = 0;
-        yend = self->height + ystep;
-        if (yend <= 0) {
+        if (-ystep >= self->height) {
             return mp_const_none;
         }
+        y = 0;
+        yend = self->height + (int)ystep;
         dy = 1;
     } else {
-        y = self->height - 1;
-        yend = ystep - 1;
-        if (yend >= y) {
+        if (ystep >= self->height) {
             return mp_const_none;
         }
+        y = self->height - 1;
+        yend = (int)ystep - 1;
         dy = -1;
     }
     for (; y != yend; y += dy) {
-        for (int x = sx; x != xend; x += dx) {
+        for (unsigned x = sx; x != xend; x += dx) {
             setpixel(self, x, y, getpixel(self, x - xstep, y - ystep));
         }
     }
@@ -1026,7 +880,6 @@ static const mp_rom_map_elem_t framebuf_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_blit), MP_ROM_PTR(&framebuf_blit_obj) },
     { MP_ROM_QSTR(MP_QSTR_scroll), MP_ROM_PTR(&framebuf_scroll_obj) },
     { MP_ROM_QSTR(MP_QSTR_text), MP_ROM_PTR(&framebuf_text_obj) },
-    { MP_ROM_QSTR(MP_QSTR_get_changes), MP_ROM_PTR(&framebuf_get_changes_obj) },
 };
 static MP_DEFINE_CONST_DICT(framebuf_locals_dict, framebuf_locals_dict_table);
 

@@ -24,3 +24,17 @@ user.props
 
 # MacOS desktop metadata files
 .DS_Store
+
+# Local workspace and release packaging exclusions
+toolchain/
+issues_fix.md
+README.md
+ports/esp32/build*/
+
+# Created by ci.sh zephyr targets
+/.ccache
+/zephyrproject
+
+# Created by ci.sh esp8266 targets
+/xtensa-lx106-elf-standalone.tar.gz
+/xtensa-lx106-elf/
