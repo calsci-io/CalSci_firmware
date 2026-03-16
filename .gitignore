@@ -11,6 +11,17 @@ build/
 build-*/
 docs/genrst/
 
+# Keep one tracked ESP32 output directory for release artefacts only.
+!ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/
+ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/*
+!ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/micropython.bin
+!ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/bootloader/
+ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/bootloader/*
+!ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/bootloader/bootloader.bin
+!ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/partition_table/
+ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/partition_table/*
+!ports/esp32/build-ESP32_GENERIC_S3-SPIRAM_OCT/partition_table/partition-table.bin
+
 # Test failure outputs and intermediate artefacts
 tests/results/*
 tests/ports/unix/ffi_lib.so
@@ -25,13 +36,6 @@ user.props
 # MacOS desktop metadata files
 .DS_Store
 
-# Local workspace and release packaging exclusions
-toolchain/*
-!toolchain/activate_idf.sh
-issues_fix.md
-README.md
-ports/esp32/build*/
-
 # Created by ci.sh zephyr targets
 /.ccache
 /zephyrproject
@@ -39,3 +43,10 @@ ports/esp32/build*/
 # Created by ci.sh esp8266 targets
 /xtensa-lx106-elf-standalone.tar.gz
 /xtensa-lx106-elf/
+
+# Local ESP-IDF snapshot for CalSci builds.
+/toolchain/*
+!/toolchain/activate_idf.sh
+
+# Local notes
+/notes.md

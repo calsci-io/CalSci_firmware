@@ -30,6 +30,7 @@ typedef struct {
 static inline void hybrid_sim_reset_display_state_locked(void);
 static inline void hybrid_sim_set_bool_locked(bool *field, bool value);
 static inline void hybrid_sim_set_u8_locked(uint8_t *field, uint8_t value);
+static inline void hybrid_sim_copy_display_state_locked(hybrid_sim_display_state_t *out_state);
 static void hybrid_sim_render_visible_fb_locked(void);
 
 static hybrid_sim_state_t s_state = {
@@ -86,6 +87,20 @@ static inline void hybrid_sim_reset_display_state_locked(void) {
     s_state.booster_ratio = 0x00;
     s_state.expect_contrast = false;
     s_state.expect_booster_ratio = false;
+}
+
+static inline void hybrid_sim_copy_display_state_locked(hybrid_sim_display_state_t *out_state) {
+    out_state->display_on = s_state.display_on;
+    out_state->invert = s_state.invert;
+    out_state->all_points_on = s_state.all_points_on;
+    out_state->sleep_mode = s_state.sleep_mode;
+    out_state->adc_reverse = s_state.adc_reverse;
+    out_state->com_reverse = s_state.com_reverse;
+    out_state->start_line = s_state.start_line;
+    out_state->contrast = s_state.contrast;
+    out_state->v0_ratio = s_state.v0_ratio;
+    out_state->power_ctrl = s_state.power_ctrl;
+    out_state->booster_ratio = s_state.booster_ratio;
 }
 
 static void hybrid_sim_render_visible_fb_locked(void) {
@@ -402,16 +417,18 @@ void hybrid_sim_capture_read_display_state(hybrid_sim_display_state_t *out_state
         return;
     }
     portENTER_CRITICAL(&s_lock);
-    out_state->display_on = s_state.display_on;
-    out_state->invert = s_state.invert;
-    out_state->all_points_on = s_state.all_points_on;
-    out_state->sleep_mode = s_state.sleep_mode;
-    out_state->adc_reverse = s_state.adc_reverse;
-    out_state->com_reverse = s_state.com_reverse;
-    out_state->start_line = s_state.start_line;
-    out_state->contrast = s_state.contrast;
-    out_state->v0_ratio = s_state.v0_ratio;
-    out_state->power_ctrl = s_state.power_ctrl;
-    out_state->booster_ratio = s_state.booster_ratio;
+    hybrid_sim_copy_display_state_locked(out_state);
+    portEXIT_CRITICAL(&s_lock);
+}
+
+void hybrid_sim_capture_read_snapshot(hybrid_sim_snapshot_t *out_snapshot) {
+    if (out_snapshot == NULL) {
+        return;
+    }
+    portENTER_CRITICAL(&s_lock);
+    hybrid_sim_render_visible_fb_locked();
+    out_snapshot->frame_id = s_state.frame_id;
+    hybrid_sim_copy_display_state_locked(&out_snapshot->display_state);
+    memcpy(out_snapshot->fb, s_state.visible_fb, sizeof(out_snapshot->fb));
     portEXIT_CRITICAL(&s_lock);
 }

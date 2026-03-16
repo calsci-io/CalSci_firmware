@@ -24,6 +24,12 @@ typedef struct {
     uint8_t booster_ratio;
 } hybrid_sim_display_state_t;
 
+typedef struct {
+    uint32_t frame_id;
+    hybrid_sim_display_state_t display_state;
+    uint8_t fb[HYBRID_SIM_FB_LEN];
+} hybrid_sim_snapshot_t;
+
 void hybrid_sim_capture_enable(bool enabled);
 bool hybrid_sim_capture_enabled(void);
 void hybrid_sim_capture_reset(void);
@@ -38,5 +44,6 @@ void hybrid_sim_capture_clear(void);
 
 size_t hybrid_sim_capture_read_fb(uint8_t *dst, size_t dst_len);
 void hybrid_sim_capture_read_display_state(hybrid_sim_display_state_t *out_state);
+void hybrid_sim_capture_read_snapshot(hybrid_sim_snapshot_t *out_snapshot);
 
 #endif
