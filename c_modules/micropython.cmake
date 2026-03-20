@@ -1,6 +1,8 @@
 include(${MICROPY_DIR}/c_modules/display/micropython.cmake)
 include(${MICROPY_DIR}/c_modules/tools/micropython.cmake)
 include(${MICROPY_DIR}/c_modules/hybrid_sim/micropython.cmake)
+include(${MICROPY_DIR}/c_modules/calsci_log/micropython.cmake)
+include(${MICROPY_DIR}/c_modules/calsci_help/micropython.cmake)
 include(${MICROPY_DIR}/c_modules/calsci_runtime/micropython.cmake)
 
 # Inject CalSci USB/product and runtime prompt behavior without touching core sources.

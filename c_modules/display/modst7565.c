@@ -6,11 +6,161 @@
  *         st7565.init(cs, rs, rst, sda, sck)
  *         st7565.graphics(buffer)
  ****************************************************************************/
+#include "../calsci_log/calsci_log.h"
+
 #include "py/obj.h"
+#include "py/objstr.h"
 #include "py/runtime.h"
 #include "st7565.h"
 
 static st7565_t disp;
+
+static const MP_DEFINE_STR_OBJ(st7565_doc_module_obj,
+    "ST7565 LCD driver for CalSci.\n"
+    "\n"
+    "Call init(...) once, then upload framebuffer bytes with graphics(...).\n"
+    "Raw controller commands are available for low-level tuning and debug.");
+
+static const MP_DEFINE_STR_OBJ(st7565_doc_init_obj,
+    "Configure SPI pins, reset the panel, and apply the startup profile.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_deinit_obj,
+    "Release the SPI device and GPIO resources held by the driver.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_reset_obj,
+    "Issue a software reset to the controller.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_clear_obj,
+    "Clear the full display RAM on the panel.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_graphics_obj,
+    "Upload framebuffer bytes; use page/column/width/pages for partial updates.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_contrast_obj,
+    "Set the electronic volume (contrast) in the range 0..63.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_invert_obj,
+    "Enable or disable inverse display mode.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_on_obj,
+    "Turn the display output on.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_off_obj,
+    "Turn the display output off.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_start_line_obj,
+    "Set hardware vertical scroll start line in the range 0..63.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_all_points_obj,
+    "Force all pixels on or return to normal RAM-driven display.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_sleep_obj,
+    "Enter controller sleep mode.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_wake_obj,
+    "Leave sleep mode and resume normal display output.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_set_adc_obj,
+    "Set segment direction; true reverses horizontal pixel order.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_set_com_dir_obj,
+    "Set COM scan direction; true reverses vertical scan order.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_set_bias_obj,
+    "Select LCD bias; true chooses 1/7 bias, false chooses 1/9.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_set_v0_ratio_obj,
+    "Set the regulator resistor ratio in the range 0..7.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_set_booster_obj,
+    "Set booster ratio command value; valid values are 0, 1, or 3.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_set_power_ctrl_obj,
+    "Set the internal power-control bitmask in the range 0..7.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_rmw_start_obj,
+    "Enter read-modify-write addressing mode.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_rmw_end_obj,
+    "Exit read-modify-write mode and restore normal addressing.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_set_page_obj,
+    "Set the raw page address for subsequent low-level writes.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_set_column_obj,
+    "Set the raw column address for subsequent low-level writes.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_write_instruction_obj,
+    "Send a raw ST7565 instruction byte.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_write_data_obj,
+    "Write one raw data byte at the current controller address.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_nop_obj,
+    "Send a no-operation command byte.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_width_obj,
+    "Display width in pixels.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_height_obj,
+    "Display height in pixels.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_pages_obj,
+    "Display height in 8-pixel pages.");
+static const MP_DEFINE_STR_OBJ(st7565_doc_spi2_host_obj,
+    "ESP-IDF SPI host constant for SPI2.");
+#ifdef SPI3_HOST
+static const MP_DEFINE_STR_OBJ(st7565_doc_spi3_host_obj,
+    "ESP-IDF SPI host constant for SPI3.");
+#endif
+
+typedef struct _st7565_help_entry_t {
+    qstr name;
+    const mp_obj_str_t *doc;
+} st7565_help_entry_t;
+
+static const st7565_help_entry_t st7565_help_entries[] = {
+    { MP_QSTR_init, &st7565_doc_init_obj },
+    { MP_QSTR_deinit, &st7565_doc_deinit_obj },
+    { MP_QSTR_reset, &st7565_doc_reset_obj },
+    { MP_QSTR_clear_display, &st7565_doc_clear_obj },
+    { MP_QSTR_graphics, &st7565_doc_graphics_obj },
+    { MP_QSTR_set_contrast, &st7565_doc_contrast_obj },
+    { MP_QSTR_invert, &st7565_doc_invert_obj },
+    { MP_QSTR_on, &st7565_doc_on_obj },
+    { MP_QSTR_off, &st7565_doc_off_obj },
+    { MP_QSTR_set_start_line, &st7565_doc_start_line_obj },
+    { MP_QSTR_all_points_on, &st7565_doc_all_points_obj },
+    { MP_QSTR_sleep, &st7565_doc_sleep_obj },
+    { MP_QSTR_wake, &st7565_doc_wake_obj },
+    { MP_QSTR_set_adc, &st7565_doc_set_adc_obj },
+    { MP_QSTR_set_com_dir, &st7565_doc_set_com_dir_obj },
+    { MP_QSTR_set_bias, &st7565_doc_set_bias_obj },
+    { MP_QSTR_set_v0_ratio, &st7565_doc_set_v0_ratio_obj },
+    { MP_QSTR_set_booster, &st7565_doc_set_booster_obj },
+    { MP_QSTR_set_power_ctrl, &st7565_doc_set_power_ctrl_obj },
+    { MP_QSTR_rmw_start, &st7565_doc_rmw_start_obj },
+    { MP_QSTR_rmw_end, &st7565_doc_rmw_end_obj },
+    { MP_QSTR_set_page_address, &st7565_doc_set_page_obj },
+    { MP_QSTR_set_column_address, &st7565_doc_set_column_obj },
+    { MP_QSTR_write_instruction, &st7565_doc_write_instruction_obj },
+    { MP_QSTR_write_data, &st7565_doc_write_data_obj },
+    { MP_QSTR_nop, &st7565_doc_nop_obj },
+    { MP_QSTR_WIDTH, &st7565_doc_width_obj },
+    { MP_QSTR_HEIGHT, &st7565_doc_height_obj },
+    { MP_QSTR_PAGES, &st7565_doc_pages_obj },
+    { MP_QSTR_SPI2_HOST, &st7565_doc_spi2_host_obj },
+#ifdef SPI3_HOST
+    { MP_QSTR_SPI3_HOST, &st7565_doc_spi3_host_obj },
+#endif
+};
+
+static void st7565_help_print_entry(const st7565_help_entry_t *entry) {
+    mp_print_str(MP_PYTHON_PRINTER, "  ");
+    mp_obj_print(MP_OBJ_NEW_QSTR(entry->name), PRINT_STR);
+    mp_print_str(MP_PYTHON_PRINTER, " -- ");
+    mp_obj_print(MP_OBJ_FROM_PTR(entry->doc), PRINT_STR);
+    mp_print_str(MP_PYTHON_PRINTER, "\n");
+}
+
+static void st7565_help_print_all(void) {
+    mp_obj_print(MP_OBJ_FROM_PTR(&st7565_doc_module_obj), PRINT_STR);
+    mp_print_str(MP_PYTHON_PRINTER, "\n");
+    for (size_t i = 0; i < MP_ARRAY_SIZE(st7565_help_entries); ++i) {
+        st7565_help_print_entry(&st7565_help_entries[i]);
+    }
+}
+
+static mp_obj_t mp_st7565_help(size_t n_args, const mp_obj_t *args) {
+    if (n_args == 0) {
+        st7565_help_print_all();
+        return mp_const_none;
+    }
+
+    qstr topic = mp_obj_str_get_qstr(args[0]);
+    for (size_t i = 0; i < MP_ARRAY_SIZE(st7565_help_entries); ++i) {
+        if (st7565_help_entries[i].name == topic) {
+            mp_obj_print(MP_OBJ_FROM_PTR(st7565_help_entries[i].doc), PRINT_STR);
+            mp_print_str(MP_PYTHON_PRINTER, "\n");
+            return mp_const_none;
+        }
+    }
+
+    mp_raise_ValueError(MP_ERROR_TEXT("unknown st7565 help topic"));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_st7565_help_obj, 0, 1, mp_st7565_help);
 
 static inline void mp_st7565_require_init(void)
 {
@@ -110,6 +260,7 @@ static mp_obj_t mp_st7565_init(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     if (disp.initialized) {
         esp_err_t deinit_ret = st7565_deinit(&disp);
         if (deinit_ret != ESP_OK) {
+            calsci_log_writef("ERROR", "display", "deinit before init failed: %d", (int)deinit_ret);
             mp_raise_OSError(deinit_ret);
         }
     }
@@ -120,8 +271,11 @@ static mp_obj_t mp_st7565_init(size_t n_args, const mp_obj_t *pos_args, mp_map_t
                                    &profile);
 
     if (ret != ESP_OK) {
+        calsci_log_writef("ERROR", "display", "init failed: %d", (int)ret);
         mp_raise_OSError(ret);
     }
+
+    calsci_log_writef("INFO", "display", "initialized on host %d", (int)host);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(mp_st7565_init_obj, 5, mp_st7565_init);
@@ -131,8 +285,10 @@ static mp_obj_t mp_st7565_deinit(void)
 {
     esp_err_t ret = st7565_deinit(&disp);
     if (ret != ESP_OK) {
+        calsci_log_writef("ERROR", "display", "deinit failed: %d", (int)ret);
         mp_raise_OSError(ret);
     }
+    CALSCI_LOG_INFO("display", "deinitialized");
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mp_st7565_deinit_obj, mp_st7565_deinit);
@@ -241,6 +397,7 @@ MP_DEFINE_WRAPPER_0(mp_st7565_nop,       st7565_nop);
 /* ───── Module globals table ─────────────────────────────────────────────── */
 static const mp_rom_map_elem_t st7565_globals[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),            MP_ROM_QSTR(MP_QSTR_st7565) },
+    { MP_ROM_QSTR(MP_QSTR_help),                MP_ROM_PTR(&mp_st7565_help_obj) },
 
     /* Lifecycle */
     { MP_ROM_QSTR(MP_QSTR_init),                MP_ROM_PTR(&mp_st7565_init_obj) },

@@ -10,12 +10,106 @@
  ****************************************************************************/
 
 #include "py/obj.h"
+#include "py/objstr.h"
 #include "py/mphal.h"
 #include "py/runtime.h"
 
+#include "../calsci_log/calsci_log.h"
 #include "hybrid_sim_capture.h"
 
 static bool s_hybrid_mode = false;
+
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_module_obj,
+    "Framebuffer capture module used by the CalSci hybrid bridge.\n"
+    "\n"
+    "It mirrors ST7565 writes into a shadow buffer so the host can poll or\n"
+    "stream terminal state without reading the physical display.");
+
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_enable_obj,
+    "enable([bool]) -> turn framebuffer capture on or off.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_enabled_obj,
+    "Return True when framebuffer capture is enabled.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_mode_obj,
+    "mode([bool]) -> get or set hybrid mode; setting prints HYBRID_MODE:ON/OFF.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_status_obj,
+    "Return a dict with frame id and current captured display/controller state.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_reset_obj,
+    "Clear the capture state and reset the stored framebuffer snapshot.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_frame_id_obj,
+    "Return the latest captured frame counter.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_changed_since_obj,
+    "Return True when a newer frame exists than last_frame.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_poll_state_obj,
+    "Return poll state dict; includes fb only when hybrid mode is on and frame changed.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_read_fb_obj,
+    "Return the full shadow framebuffer as bytes.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_pop_frame_obj,
+    "Return a dict with frame_id and the full framebuffer snapshot.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_width_obj,
+    "Shadow framebuffer width in pixels.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_height_obj,
+    "Shadow framebuffer height in pixels.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_pages_obj,
+    "Shadow framebuffer height in 8-pixel pages.");
+static const MP_DEFINE_STR_OBJ(hybrid_sim_doc_fb_len_obj,
+    "Framebuffer size in bytes.");
+
+typedef struct _hybrid_sim_help_entry_t {
+    qstr name;
+    const mp_obj_str_t *doc;
+} hybrid_sim_help_entry_t;
+
+static const hybrid_sim_help_entry_t hybrid_sim_help_entries[] = {
+    { MP_QSTR_enable, &hybrid_sim_doc_enable_obj },
+    { MP_QSTR_enabled, &hybrid_sim_doc_enabled_obj },
+    { MP_QSTR_mode, &hybrid_sim_doc_mode_obj },
+    { MP_QSTR_status, &hybrid_sim_doc_status_obj },
+    { MP_QSTR_reset, &hybrid_sim_doc_reset_obj },
+    { MP_QSTR_frame_id, &hybrid_sim_doc_frame_id_obj },
+    { MP_QSTR_changed_since, &hybrid_sim_doc_changed_since_obj },
+    { MP_QSTR_poll_state, &hybrid_sim_doc_poll_state_obj },
+    { MP_QSTR_read_fb, &hybrid_sim_doc_read_fb_obj },
+    { MP_QSTR_pop_frame, &hybrid_sim_doc_pop_frame_obj },
+    { MP_QSTR_WIDTH, &hybrid_sim_doc_width_obj },
+    { MP_QSTR_HEIGHT, &hybrid_sim_doc_height_obj },
+    { MP_QSTR_PAGES, &hybrid_sim_doc_pages_obj },
+    { MP_QSTR_FB_LEN, &hybrid_sim_doc_fb_len_obj },
+};
+
+static void hybrid_sim_help_print_entry(const hybrid_sim_help_entry_t *entry) {
+    mp_print_str(MP_PYTHON_PRINTER, "  ");
+    mp_obj_print(MP_OBJ_NEW_QSTR(entry->name), PRINT_STR);
+    mp_print_str(MP_PYTHON_PRINTER, " -- ");
+    mp_obj_print(MP_OBJ_FROM_PTR(entry->doc), PRINT_STR);
+    mp_print_str(MP_PYTHON_PRINTER, "\n");
+}
+
+static void hybrid_sim_help_print_all(void) {
+    mp_obj_print(MP_OBJ_FROM_PTR(&hybrid_sim_doc_module_obj), PRINT_STR);
+    mp_print_str(MP_PYTHON_PRINTER, "\n");
+    for (size_t i = 0; i < MP_ARRAY_SIZE(hybrid_sim_help_entries); ++i) {
+        hybrid_sim_help_print_entry(&hybrid_sim_help_entries[i]);
+    }
+}
+
+static mp_obj_t mp_hybrid_help(size_t n_args, const mp_obj_t *args) {
+    if (n_args == 0) {
+        hybrid_sim_help_print_all();
+        return mp_const_none;
+    }
+
+    qstr topic = mp_obj_str_get_qstr(args[0]);
+    for (size_t i = 0; i < MP_ARRAY_SIZE(hybrid_sim_help_entries); ++i) {
+        if (hybrid_sim_help_entries[i].name == topic) {
+            mp_obj_print(MP_OBJ_FROM_PTR(hybrid_sim_help_entries[i].doc), PRINT_STR);
+            mp_print_str(MP_PYTHON_PRINTER, "\n");
+            return mp_const_none;
+        }
+    }
+
+    mp_raise_ValueError(MP_ERROR_TEXT("unknown hybrid_sim help topic"));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_hybrid_help_obj, 0, 1, mp_hybrid_help);
 
 static void hybrid_sim_write_mode_line(bool enabled) {
     if (enabled) {
@@ -60,6 +154,7 @@ static mp_obj_t mp_hybrid_enable(size_t n_args, const mp_obj_t *args) {
         enabled = mp_obj_is_true(args[0]);
     }
     hybrid_sim_capture_enable(enabled);
+    CALSCI_LOG_INFO("hybrid", enabled ? "capture enabled" : "capture disabled");
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_hybrid_enable_obj, 0, 1, mp_hybrid_enable);
@@ -71,6 +166,7 @@ static mp_obj_t mp_hybrid_mode(size_t n_args, const mp_obj_t *args) {
 
     s_hybrid_mode = mp_obj_is_true(args[0]);
     hybrid_sim_write_mode_line(s_hybrid_mode);
+    CALSCI_LOG_INFO("hybrid", s_hybrid_mode ? "mode enabled" : "mode disabled");
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_hybrid_mode_obj, 0, 1, mp_hybrid_mode);
@@ -91,6 +187,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mp_hybrid_status_obj, mp_hybrid_status);
 
 static mp_obj_t mp_hybrid_reset(void) {
     hybrid_sim_capture_reset();
+    CALSCI_LOG_INFO("hybrid", "capture state reset");
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mp_hybrid_reset_obj, mp_hybrid_reset);
@@ -151,6 +248,7 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mp_hybrid_pop_frame_obj, mp_hybrid_pop_frame);
 
 static const mp_rom_map_elem_t hybrid_sim_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_hybrid_sim) },
+    { MP_ROM_QSTR(MP_QSTR_help), MP_ROM_PTR(&mp_hybrid_help_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_enable), MP_ROM_PTR(&mp_hybrid_enable_obj) },
     { MP_ROM_QSTR(MP_QSTR_enabled), MP_ROM_PTR(&mp_hybrid_enabled_obj) },
