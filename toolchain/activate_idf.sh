@@ -111,11 +111,14 @@ main() {
     check_tool_dir openocd-esp32 || return 1
 
     export IDF_TOOLS_PATH="${TOOLS_DIR}"
+    export IDF_COMPONENT_CACHE_PATH="${TOOLS_DIR}/component_cache"
     export CALSCI_FIRMWARE_DIR="${FIRMWARE_DIR}"
     export CALSCI_BUILD_DIR="${BUILD_DIR}"
     export CALSCI_USER_C_MODULES="${USER_C_MODULES_PATH}"
     export IDF_TOOLS_INSTALL_CMD="${IDF_PYTHON_BIN} ${IDF_DIR}/tools/idf_tools.py install --targets=esp32s3"
     export IDF_TOOLS_EXPORT_CMD="${IDF_PYTHON_BIN} ${IDF_DIR}/tools/idf_tools.py export"
+
+    mkdir -p "${IDF_COMPONENT_CACHE_PATH}"
 
     if ! sync_idf_targets; then
         echo "ERROR: Failed to sync ESP-IDF tool metadata" >&2

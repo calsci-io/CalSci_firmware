@@ -37,7 +37,9 @@ static const MP_DEFINE_STR_OBJ(calsci_help_summary_tools_obj,
 static const MP_DEFINE_STR_OBJ(calsci_help_summary_hybrid_obj,
     "boot.py hybrid bridge mode helpers and debounce controls.");
 static const MP_DEFINE_STR_OBJ(calsci_help_summary_runtime_obj,
-    "boot.py keypad ownership and REPL wait helpers.");
+    "Firmware runtime helpers for REPL-safe startup and keypad ownership.");
+static const MP_DEFINE_STR_OBJ(calsci_help_summary_keypad_obj,
+    "Firmware keypad scanner module with a configurable Keypad class.");
 static const MP_DEFINE_STR_OBJ(calsci_help_summary_log_obj,
     "Shared internal firmware log module.");
 
@@ -91,12 +93,22 @@ static const MP_DEFINE_STR_OBJ(calsci_help_doc_hybrid_obj,
     "  hyb_stream_updated_buffer()             -- bridge wait loop for streamed framebuffer updates.");
 
 static const MP_DEFINE_STR_OBJ(calsci_help_doc_runtime_obj,
-    "Runtime helpers exported by boot.py:\n"
+    "Runtime helpers exported by the calsci_runtime firmware module:\n"
     "  set_calsci_keypad_blocked(blocked) -- set keypad ownership flag explicitly.\n"
     "  block_calsci_keypad()              -- mark the keypad as owned by host/REPL.\n"
     "  unblock_calsci_keypad()            -- return keypad ownership to local scanning.\n"
     "  calsci_keypad_blocked()            -- read the keypad ownership flag.\n"
     "  wait_if_repl_busy(cb=None)         -- wait until the keypad block is released.");
+static const MP_DEFINE_STR_OBJ(calsci_help_doc_keypad_obj,
+    "Firmware keypad helpers live in the calsci_keypad module.\n"
+    "\n"
+    "Use:\n"
+    "  import calsci_keypad\n"
+    "  calsci_keypad.help()\n"
+    "  keypad = calsci_keypad.Keypad(rows, cols)\n"
+    "  keypad.keypad_loop()\n"
+    "\n"
+    "The constructor takes runtime pin lists so board wiring stays configurable.");
 static const MP_DEFINE_STR_OBJ(calsci_help_doc_log_obj,
     "Firmware logging is exposed by the calsci_log module.\n"
     "\n"
@@ -121,6 +133,7 @@ static const calsci_help_entry_t calsci_help_entries[] = {
     { MP_QSTR_tools, &calsci_help_summary_tools_obj, &calsci_help_doc_tools_obj },
     { MP_QSTR_hybrid, &calsci_help_summary_hybrid_obj, &calsci_help_doc_hybrid_obj },
     { MP_QSTR_runtime, &calsci_help_summary_runtime_obj, &calsci_help_doc_runtime_obj },
+    { MP_QSTR_keypad, &calsci_help_summary_keypad_obj, &calsci_help_doc_keypad_obj },
     { MP_QSTR_log, &calsci_help_summary_log_obj, &calsci_help_doc_log_obj },
 };
 
@@ -178,6 +191,7 @@ static const mp_rom_map_elem_t calsci_help_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_tools), MP_ROM_QSTR(MP_QSTR_tools) },
     { MP_ROM_QSTR(MP_QSTR_hybrid), MP_ROM_QSTR(MP_QSTR_hybrid) },
     { MP_ROM_QSTR(MP_QSTR_runtime), MP_ROM_QSTR(MP_QSTR_runtime) },
+    { MP_ROM_QSTR(MP_QSTR_keypad), MP_ROM_QSTR(MP_QSTR_keypad) },
 };
 static MP_DEFINE_CONST_DICT(calsci_help_module_globals, calsci_help_module_globals_table);
 

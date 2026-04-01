@@ -40,10 +40,13 @@ endif
 DEVICE += $(PORT_ARG) $(BAUD_ARG)
 
 PYTHON ?= python3
+export IDF_COMPONENT_CACHE_PATH ?= $(abspath ../../toolchain/espressif/component_cache)
 
 .PHONY: all clean deploy erase submodules FORCE
 
 CMAKE_ARGS =
+BUILD_INPUT_STATE := $(BUILD)/.calsci-build-inputs.json
+BUILD_INPUT_SIG_CMD = $(PYTHON) check_build_signature.py --state-file "$(BUILD_INPUT_STATE)" --build-dir "$(BUILD)" --board "$(BOARD)" --board-variant "$(BOARD_VARIANT)" --user-c-modules "$(USER_C_MODULES)" --frozen-manifest "$(FROZEN_MANIFEST)" --preview-version-2 "$(MICROPY_PREVIEW_VERSION_2)"
 
 ifdef USER_C_MODULES
 	CMAKE_ARGS += -DUSER_C_MODULES=${USER_C_MODULES}
@@ -73,7 +76,27 @@ define RUN_IDF_PY
 	$(Q)idf.py $(IDFPY_FLAGS) -B $(BUILD) $(1)
 endef
 
+define RUN_FULLCLEAN
+	if idf.py $(IDFPY_FLAGS) -B $(BUILD) fullclean; then \
+		:; \
+	else \
+		echo "idf.py fullclean failed for $(BUILD); removing the build directory directly."; \
+		rm -rf "$(BUILD)"; \
+	fi
+endef
+
 all:
+	@if $(BUILD_INPUT_SIG_CMD) check; then \
+		:; \
+	else \
+		status=$$?; \
+		if [ $$status -eq 2 ]; then \
+			echo "Build inputs changed for $(BUILD); running fullclean to remove stale generated files."; \
+			$(call RUN_FULLCLEAN); \
+		else \
+			exit $$status; \
+		fi; \
+	fi
 	$(Q)idf.py $(IDFPY_FLAGS) -B $(BUILD) build || (echo -e $(HELP_BUILD_ERROR); false)
 	$(Q)$(PYTHON) makeimg.py \
 		$(BUILD)/sdkconfig \
@@ -82,11 +105,12 @@ all:
 		$(BUILD)/micropython.bin \
 		$(BUILD)/firmware.bin \
 		$(BUILD)/micropython.uf2
+	$(Q)$(BUILD_INPUT_SIG_CMD) write
 
 $(BUILD)/bootloader/bootloader.bin $(BUILD)/partition_table/partition-table.bin $(BUILD)/micropython.bin: FORCE
 
 clean:
-	$(call RUN_IDF_PY,fullclean)
+	$(call RUN_FULLCLEAN)
 
 deploy:
 	$(call RUN_IDF_PY,$(DEVICE) flash)
