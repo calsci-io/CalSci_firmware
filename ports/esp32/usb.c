@@ -24,6 +24,8 @@
  * THE SOFTWARE.
  */
 
+#include <stdio.h>
+
 #include "py/runtime.h"
 #include "py/mphal.h"
 #include "usb.h"
@@ -35,8 +37,15 @@
 #include "esp_private/usb_phy.h"
 
 #include "shared/tinyusb/mp_usbd.h"
+#include "shared/tinyusb/tusb_config.h"
 
 static usb_phy_handle_t phy_hdl;
+
+#define CALSCI_USB_MAC_BYTES (6)
+
+static void calsci_runtime_get_mac_bytes(uint8_t *mac) {
+    esp_efuse_mac_get_default(mac);
+}
 
 void usb_phy_init(void) {
     // ref: https://github.com/espressif/esp-usb/blob/4b6a798d0bed444fff48147c8dcdbbd038e92892/device/esp_tinyusb/tinyusb.c
@@ -64,11 +73,45 @@ void usb_usj_mode(void) {
 }
 #endif
 
+#if CALSCI_RUNTIME_HAS_DYNAMIC_USB_STRINGS
+static void calsci_runtime_format_usb_name(char *buf, size_t len) {
+    uint8_t mac[CALSCI_USB_MAC_BYTES];
+    calsci_runtime_get_mac_bytes(mac);
+    MP_STATIC_ASSERT((sizeof(CALSCI_RUNTIME_USB_NAME_PREFIX) - 1) + CALSCI_USB_MAC_BYTES * 2 <= MICROPY_HW_USB_DESC_STR_MAX);
+    snprintf(
+        buf,
+        len,
+        CALSCI_RUNTIME_USB_NAME_PREFIX "%02X%02X%02X%02X%02X%02X",
+        mac[0],
+        mac[1],
+        mac[2],
+        mac[3],
+        mac[4],
+        mac[5]
+    );
+}
+
+bool calsci_runtime_get_usb_dynamic_string(uint8_t index, char *buf, size_t len) {
+    if (buf == NULL || len == 0) {
+        return false;
+    }
+
+    switch (index) {
+        case USBD_STR_PRODUCT:
+        case USBD_STR_CDC:
+            calsci_runtime_format_usb_name(buf, len);
+            return true;
+        default:
+            return false;
+    }
+}
+#endif
+
 void mp_usbd_port_get_serial_number(char *serial_buf) {
     // use factory default MAC as serial ID
-    uint8_t mac[8];
-    esp_efuse_mac_get_default(mac);
-    MP_STATIC_ASSERT(sizeof(mac) * 2 <= MICROPY_HW_USB_DESC_STR_MAX);
+    uint8_t mac[CALSCI_USB_MAC_BYTES];
+    calsci_runtime_get_mac_bytes(mac);
+    MP_STATIC_ASSERT(CALSCI_USB_MAC_BYTES * 2 <= MICROPY_HW_USB_DESC_STR_MAX);
     mp_usbd_hex_str(serial_buf, mac, sizeof(mac));
 }
 

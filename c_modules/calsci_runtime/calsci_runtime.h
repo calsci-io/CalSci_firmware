@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // Strict device identity used by the VS Code extension.
 #ifndef MICROPY_HW_USB_PRODUCT_FS_STRING
@@ -11,6 +12,14 @@
 
 #ifndef MICROPY_HW_USB_MANUFACTURER_STRING
 #define MICROPY_HW_USB_MANUFACTURER_STRING "CalSci"
+#endif
+
+#ifndef CALSCI_RUNTIME_USB_NAME_PREFIX
+#define CALSCI_RUNTIME_USB_NAME_PREFIX "CalSci_"
+#endif
+
+#ifndef CALSCI_RUNTIME_HAS_DYNAMIC_USB_STRINGS
+#define CALSCI_RUNTIME_HAS_DYNAMIC_USB_STRINGS (1)
 #endif
 
 #ifndef CALSCI_MAIN_TASK_STACK_SIZE
@@ -24,6 +33,10 @@
 bool calsci_runtime_set_keypad_blocked(bool blocked);
 bool calsci_runtime_keypad_blocked(void);
 void calsci_runtime_wait_if_keypad_blocked(void (*release_cb)(void *), void *ctx);
+
+#if CALSCI_RUNTIME_HAS_DYNAMIC_USB_STRINGS
+bool calsci_runtime_get_usb_dynamic_string(uint8_t index, char *buf, size_t len);
+#endif
 
 void calsci_port_init(void);
 int calsci_run_main_file_if_exists(const char *filename);

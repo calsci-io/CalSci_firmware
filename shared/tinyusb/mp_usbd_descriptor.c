@@ -93,30 +93,38 @@ const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     // Otherwise, generate a "UNICODE" string descriptor from the C string
 
     if (desc_str == NULL) {
-        // Fall back to the "static" string
-        switch (index) {
-            case USBD_STR_SERIAL:
-                mp_usbd_port_get_serial_number(serial_buf);
-                desc_str = serial_buf;
-                break;
-            case USBD_STR_MANUF:
-                desc_str = MICROPY_HW_USB_MANUFACTURER_STRING;
-                break;
-            case USBD_STR_PRODUCT:
-                desc_str = MICROPY_HW_USB_PRODUCT_FS_STRING;
-                break;
-            #if CFG_TUD_CDC
-            case USBD_STR_CDC:
-                desc_str = MICROPY_HW_USB_CDC_INTERFACE_STRING;
-                break;
-            #endif
-            #if CFG_TUD_MSC
-            case USBD_STR_MSC:
-                desc_str = MICROPY_HW_USB_MSC_INTERFACE_STRING;
-                break;
-            #endif
-            default:
-                break;
+        #if CALSCI_RUNTIME_HAS_DYNAMIC_USB_STRINGS
+        if (calsci_runtime_get_usb_dynamic_string(index, serial_buf, sizeof(serial_buf))) {
+            desc_str = serial_buf;
+        }
+        #endif
+
+        if (desc_str == NULL) {
+            // Fall back to the "static" string
+            switch (index) {
+                case USBD_STR_SERIAL:
+                    mp_usbd_port_get_serial_number(serial_buf);
+                    desc_str = serial_buf;
+                    break;
+                case USBD_STR_MANUF:
+                    desc_str = MICROPY_HW_USB_MANUFACTURER_STRING;
+                    break;
+                case USBD_STR_PRODUCT:
+                    desc_str = MICROPY_HW_USB_PRODUCT_FS_STRING;
+                    break;
+                #if CFG_TUD_CDC
+                case USBD_STR_CDC:
+                    desc_str = MICROPY_HW_USB_CDC_INTERFACE_STRING;
+                    break;
+                #endif
+                #if CFG_TUD_MSC
+                case USBD_STR_MSC:
+                    desc_str = MICROPY_HW_USB_MSC_INTERFACE_STRING;
+                    break;
+                #endif
+                default:
+                    break;
+            }
         }
     }
 
